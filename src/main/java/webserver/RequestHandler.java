@@ -1,25 +1,16 @@
 package webserver;
 
-import java.io.BufferedReader;
-import java.io.DataOutputStream;
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
+import db.DataBase;
+import model.User;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import util.HttpRequestUtils;
+
+import java.io.*;
 import java.net.Socket;
 import java.nio.file.Files;
 import java.util.Collection;
 import java.util.Map;
-
-import model.User;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import util.HttpRequestUtils;
-import util.IOUtils;
-import db.DataBase;
 
 public class RequestHandler extends Thread {
     private static final Logger log = LoggerFactory.getLogger(RequestHandler.class);
@@ -37,12 +28,12 @@ public class RequestHandler extends Thread {
         try (InputStream in = connection.getInputStream(); OutputStream out = connection.getOutputStream()) {
             HttpRequest request = new HttpRequest(in);
 
-            boolean logined = false;
-
             String url = request.getPath();
             if ("/user/create".equals(url)) {
-                User user = new User(request.getParameter("userId"), request.getParameter("password"),
-                        request.getParameter("name"), request.getParameter("email"));
+                User user = new User(request.getParameter("userId"),
+                        request.getParameter("password"),
+                        request.getParameter("name"),
+                        request.getParameter("email"));
                 log.debug("user : {}", user);
                 DataBase.addUser(user);
                 DataOutputStream dos = new DataOutputStream(out);
@@ -60,7 +51,7 @@ public class RequestHandler extends Thread {
                     responseResource(out, "/user/login_failed.html");
                 }
             } else if ("/user/list".equals(url)) {
-                if (!logined) {
+                if (!isLogin(request.getHeader("Cookie"))) {
                     responseResource(out, "/user/login.html");
                     return;
                 }
@@ -90,15 +81,14 @@ public class RequestHandler extends Thread {
         }
     }
 
-//    private boolean isLogin(String line) {
-//        String[] headerTokens = line.split(":");
-//        Map<String, String> cookies = HttpRequestUtils.parseCookies(headerTokens[1].trim());
-//        String value = cookies.get("logined");
-//        if (value == null) {
-//            return false;
-//        }
-//        return Boolean.parseBoolean(value);
-//    }
+    private boolean isLogin(String cookieValue) {
+        Map<String, String> cookies = HttpRequestUtils.parseCookies(cookieValue);
+        String value = cookies.get("logined");
+        if (value == null) {
+            return false;
+        }
+        return Boolean.parseBoolean(value);
+    }
 
     private void responseResource(OutputStream out, String url) throws IOException {
         DataOutputStream dos = new DataOutputStream(out);
@@ -113,19 +103,6 @@ public class RequestHandler extends Thread {
         response200CssHeader(dos, body.length);
         responseBody(dos, body);
     }
-
-//    private int getContentLength(String line) {
-//        String[] headerTokens = line.split(":");
-//        return Integer.parseInt(headerTokens[1].trim());
-//    }
-
-//    private String getDefaultUrl(String[] tokens) {
-//        String url = tokens[1];
-//        if (url.equals("/")) {
-//            url = "/index.html";
-//        }
-//        return url;
-//    }
 
     private void response200Header(DataOutputStream dos, int lengthOfBodyContent) {
         try {
