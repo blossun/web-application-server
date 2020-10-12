@@ -69,17 +69,21 @@ public class HttpRequest {
     private void processRequestLine(String requestLine) {
         log.debug("request line : {}", requestLine);
         String[] tokens = requestLine.split(" ");
-        this.method = tokens[0];
-        // GET인우, POST인 경우
-        if (this.method.equals("GET")) {
-            this.path = parseDefaultUrl(tokens);
-            if (path.contains("?")) {
-                this.path = parseDefaultUrl(tokens).substring(0, tokens[1].indexOf("?"));
-                this.params = HttpRequestUtils.parseQueryString(parseDefaultUrl(tokens).substring(tokens[1].indexOf("?") + 1));
-            }
-        } else {
-            this.path = parseDefaultUrl(tokens);
+        method = tokens[0];
+
+        if ("POST".equals(method)) {
+            path = parseDefaultUrl(tokens);
+            return;
         }
+
+        int index = parseDefaultUrl(tokens).indexOf("?"); //GET에 queryString 존재 여부에 따라 로직 분리
+        if (index == -1) {
+            this.path = parseDefaultUrl(tokens);
+            return;
+        }
+
+        path = parseDefaultUrl(tokens).substring(0, index);
+        params = HttpRequestUtils.parseQueryString(parseDefaultUrl(tokens).substring(index + 1));
     }
 
     private String parseDefaultUrl(String[] tokens) {
