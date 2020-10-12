@@ -18,7 +18,7 @@ public class HttpRequest {
     private Map<String, String> headers = new HashMap<>();
     private Map<String, String> params = new HashMap<>();
 
-    public String getMethod() {
+    public HttpMethod getMethod() {
         return requestLine.getMethod();
     }
 
@@ -55,7 +55,7 @@ public class HttpRequest {
                 line = br.readLine();
             }
 
-            if ("POST".equals(getMethod())) { //POST 경우, params는 body값으로 파싱
+            if (getMethod() == HttpMethod.POST) { //POST 경우, params는 body값으로 파싱
                 String body = IOUtils.readData(br, Integer.parseInt(headers.get("Content-Length")));
                 params = HttpRequestUtils.parseQueryString(body);
                 return ;
