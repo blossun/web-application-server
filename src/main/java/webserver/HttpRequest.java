@@ -47,7 +47,7 @@ public class HttpRequest {
 
             this.headers.put("Content-Length", "0");
             line = br.readLine();
-            while (line != null && !line.equals("")) { //헤더 //line.equals("")만 있을 때, GET 메세지에서 NPE가 발생해서 조건 추가
+            while (!line.equals("")) { //헤더 //line.equals("")만 있을 때, GET 메세지에서 NPE가 발생해서 조건 추가
                 log.debug("header : {}", line);
                 HttpRequestUtils.Pair header = parseHeader(line);
                 if (header != null) {
@@ -56,12 +56,12 @@ public class HttpRequest {
                 line = br.readLine();
             }
 
-            if (this.method.equals("POST")) {
+            if ("POST".equals(method)) {
                 String body = IOUtils.readData(br, Integer.parseInt(headers.get("Content-Length")));
-                this.params = HttpRequestUtils.parseQueryString(body);
+                params = HttpRequestUtils.parseQueryString(body);
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            log.error(e.getMessage());
         }
 
     }
