@@ -14,17 +14,16 @@ import static util.HttpRequestUtils.parseHeader;
 public class HttpRequest {
     private static final Logger log = LoggerFactory.getLogger(HttpRequest.class);
 
-    private String method;
-    private String path;
+    private RequestLine requestLine;
     private Map<String, String> headers = new HashMap<>();
     private Map<String, String> params = new HashMap<>();
 
     public String getMethod() {
-        return method;
+        return requestLine.getMethod();
     }
 
     public String getPath() {
-        return path;
+        return requestLine.getPath();
     }
 
     public String getHeader(String key) {
@@ -43,7 +42,7 @@ public class HttpRequest {
                 return;
             }
 
-            processRequestLine(line);
+            requestLine = new RequestLine(line);
 
             this.headers.put("Content-Length", "0");
             line = br.readLine();
@@ -56,41 +55,17 @@ public class HttpRequest {
                 line = br.readLine();
             }
 
-            if ("POST".equals(method)) {
+            if ("POST".equals(getMethod())) { //POST 경우, params는 body값으로 파싱
                 String body = IOUtils.readData(br, Integer.parseInt(headers.get("Content-Length")));
                 params = HttpRequestUtils.parseQueryString(body);
+                return ;
             }
+            //GET 경우, params는 RequestLine의 QueryString값으로 파싱
+            params = requestLine.getParams();
         } catch (IOException e) {
             log.error(e.getMessage());
         }
 
     }
 
-    private void processRequestLine(String requestLine) {
-        log.debug("request line : {}", requestLine);
-        String[] tokens = requestLine.split(" ");
-        method = tokens[0];
-
-        if ("POST".equals(method)) {
-            path = parseDefaultUrl(tokens);
-            return;
-        }
-
-        int index = parseDefaultUrl(tokens).indexOf("?"); //GET에 queryString 존재 여부에 따라 로직 분리
-        if (index == -1) {
-            this.path = parseDefaultUrl(tokens);
-            return;
-        }
-
-        path = parseDefaultUrl(tokens).substring(0, index);
-        params = HttpRequestUtils.parseQueryString(parseDefaultUrl(tokens).substring(index + 1));
-    }
-
-    private String parseDefaultUrl(String[] tokens) {
-        String url = tokens[1];
-        if (url.equals("/")) {
-            url = "/index.html";
-        }
-        return url;
-    }
 }
