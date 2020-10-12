@@ -55,7 +55,7 @@ public class HttpRequest {
                 line = br.readLine();
             }
 
-            if (getMethod() == HttpMethod.POST) { //POST 경우, params는 body값으로 파싱
+            if (getMethod().isPost()) { //POST 경우, params는 body값으로 파싱
                 String body = IOUtils.readData(br, Integer.parseInt(headers.get("Content-Length")));
                 params = HttpRequestUtils.parseQueryString(body);
                 return ;
