@@ -51,15 +51,6 @@ public class HttpRequest {
         }
     }
 
-    public boolean isLogin() {
-        Map<String, String> cookies = HttpRequestUtils.parseCookies(getHeader("Cookie"));
-        String logined = cookies.get("logined");
-        if (logined == null) {
-            return false;
-        }
-        return Boolean.parseBoolean(logined);
-    }
-
     public HttpMethod getMethod() {
         return requestLine.getMethod();
     }
