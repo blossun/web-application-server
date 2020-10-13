@@ -5,7 +5,6 @@ import model.User;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -37,21 +36,15 @@ public class RequestHandler extends Thread {
                         request.getParameter("email"));
                 log.debug("user : {}", user);
                 DataBase.addUser(user);
-                DataOutputStream dos = new DataOutputStream(out);
                 response.sendRedirect("/index.html");
             } else if ("/user/login".equals(url)) {
                 User user = DataBase.findUserById(request.getParameter("userId"));
-                if (user != null) {
-                    if (user.login(request.getParameter("password"))) {
-                        DataOutputStream dos = new DataOutputStream(out);
-                        response.addHeader("Set-Cookie", "logined=true");
-                        response.sendRedirect("/index.html");
-                    } else {
-                        response.forward("/user/login_failed.html");
-                    }
-                } else {
-                    response.forward("/user/login_failed.html");
+                if (user != null && user.login(request.getParameter("password"))) {
+                    response.addHeader("Set-Cookie", "logined=true");
+                    response.sendRedirect("/index.html");
+                    return;
                 }
+                response.forward("/user/login_failed.html");
             } else if ("/user/list".equals(url)) {
                 if (!request.isLogin()) {
                     response.forward("/user/login.html");
