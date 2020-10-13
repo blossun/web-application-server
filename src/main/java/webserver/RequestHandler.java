@@ -38,7 +38,7 @@ public class RequestHandler extends Thread {
                 log.debug("user : {}", user);
                 DataBase.addUser(user);
                 DataOutputStream dos = new DataOutputStream(out);
-                response.sendRedirect("/index.html"); //body 불필요
+                response.sendRedirect("/index.html");
             } else if ("/user/login".equals(url)) {
                 User user = DataBase.findUserById(request.getParameter("userId"));
                 if (user != null) {

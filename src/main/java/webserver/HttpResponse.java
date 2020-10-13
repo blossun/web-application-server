@@ -10,11 +10,12 @@ import java.io.OutputStream;
 import java.nio.file.Files;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 public class HttpResponse {
     private static final Logger log = LoggerFactory.getLogger(HttpResponse.class);
 
-    Map<String, String> header = new HashMap<>();
+    Map<String, String> headers = new HashMap<>();
     DataOutputStream dos = null;
 
     public HttpResponse(OutputStream out) {
@@ -47,13 +48,8 @@ public class HttpResponse {
         try {
             dos.writeBytes("HTTP/1.1 302 Redirect \r\n");
             addHeader("Location", url);
-            for (Map.Entry<String, String> entry : header.entrySet()) {
-                String k = entry.getKey();
-                String v = entry.getValue();
-                dos.writeBytes(k + ": " + v + "\r\n");
-            }
+            processHeaders();
             dos.writeBytes("\r\n");
-            dos.flush();
         } catch (IOException e) {
             log.error(e.getMessage());
         }
@@ -62,11 +58,7 @@ public class HttpResponse {
     public void response200Header() {
         try {
             dos.writeBytes("HTTP/1.1 200 OK \r\n");
-            for (Map.Entry<String, String> entry : header.entrySet()) {
-                String k = entry.getKey();
-                String v = entry.getValue();
-                dos.writeBytes(k + ": " + v + "\r\n");
-            }
+            processHeaders();
             dos.writeBytes("\r\n");
         } catch (IOException e) {
             log.error(e.getMessage());
@@ -83,7 +75,18 @@ public class HttpResponse {
         }
     }
 
+    private void processHeaders() {
+        try {
+            Set<String> keys = headers.keySet();
+            for (String key : keys) {
+                dos.writeBytes(key + ": " + headers.get(key) + " \r\n");
+            }
+        } catch (IOException e) {
+            log.error(e.getMessage());
+        }
+    }
+
     public void addHeader(String key, String value) {
-        header.put(key, value);
+        headers.put(key, value);
     }
 }
