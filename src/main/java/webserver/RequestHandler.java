@@ -69,10 +69,7 @@ public class RequestHandler extends Thread {
                     sb.append("</tr>");
                 }
                 sb.append("</table>");
-                byte[] body = sb.toString().getBytes();
-                DataOutputStream dos = new DataOutputStream(out);
-                response.response200Header("html", body.length);
-                response.responseBody(body);
+                response.forwardBody(sb.toString());
             }
             response.forward(url);
         } catch (IOException e) {

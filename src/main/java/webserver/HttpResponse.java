@@ -15,7 +15,7 @@ public class HttpResponse {
     private static final Logger log = LoggerFactory.getLogger(HttpResponse.class);
 
     Map<String, String> header = new HashMap<>();
-    DataOutputStream dos;
+    DataOutputStream dos = null;
 
     public HttpResponse(OutputStream out) {
         this.dos = new DataOutputStream(out);
@@ -23,13 +23,24 @@ public class HttpResponse {
 
     public void forward(String url) throws IOException {
         byte[] body = Files.readAllBytes(new File("./webapp" + url).toPath());
-        String contentType = "html";
-        if (url.endsWith("css")) {
-            contentType = "css";
+        if (url.endsWith(".css")) {
+            addHeader("Content-Type", "text/css");
+        } else if (url.endsWith(".js")) {
+            addHeader("Content-Type", "text/javascript");
+        } else {
+            addHeader("Content-Type", "text/html;charset=utf-8");
         }
-        log.debug("contentType : {}", contentType);
-        response200Header(contentType, body.length);
+        addHeader("Content-Length", body.length + "");
+        response200Header();
         responseBody(body);
+    }
+
+    public void forwardBody(String body) {
+        byte[] contents = body.getBytes();
+        addHeader("Content-Type", "text/html;charset=utf-8");
+        addHeader("Content-Length", contents.length + "");
+        response200Header();
+        responseBody(contents);
     }
 
     public void sendRedirect(String url) {
@@ -48,11 +59,9 @@ public class HttpResponse {
         }
     }
 
-    public void response200Header(String contentType, int lengthOfBodyContent) {
+    public void response200Header() {
         try {
             dos.writeBytes("HTTP/1.1 200 OK \r\n");
-            addHeader("Content-Type", "text/" + contentType + ";charset=utf-8");
-            addHeader("Content-Length", String.valueOf(lengthOfBodyContent));
             for (Map.Entry<String, String> entry : header.entrySet()) {
                 String k = entry.getKey();
                 String v = entry.getValue();
