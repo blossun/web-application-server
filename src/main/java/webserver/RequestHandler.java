@@ -1,8 +1,6 @@
 package webserver;
 
-import controller.CreateUserController;
-import controller.ListUserController;
-import controller.LoginController;
+import controller.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -29,14 +27,12 @@ public class RequestHandler extends Thread {
             HttpResponse response = new HttpResponse(out);
 
             String url = request.getPath();
-            if ("/user/create".equals(url)) {
-                new CreateUserController().service(request, response);
-            } else if ("/user/login".equals(url)) {
-                new LoginController().service(request, response);
-            } else if ("/user/list".equals(url)) {
-                new ListUserController().service(request, response);
+            Controller controller = RequestMapping.getController(url);
+            if (controller == null) {
+                response.forward(url);
+                return ;
             }
-            response.forward(url);
+            controller.service(request, response);
         } catch (IOException e) {
             log.error(e.getMessage());
         }
