@@ -44,8 +44,7 @@ public class RequestHandler extends Thread {
                 if (user != null) {
                     if (user.login(request.getParameter("password"))) {
                         DataOutputStream dos = new DataOutputStream(out);
-                        //TODO: rseponse.header에 직접 접근해서 put 메소드로 값을 셋팅하는 것보다 별도의 메소드로 분리하는 것이 좋을 듯
-                        response.header.put("Set-Cookie", "logined=true");
+                        response.addHeader("Set-Cookie", "logined=true");
                         response.sendRedirect("/index.html");
                     } else {
                         response.forward("/user/login_failed.html");

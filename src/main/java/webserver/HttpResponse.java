@@ -35,7 +35,7 @@ public class HttpResponse {
     public void sendRedirect(String url) {
         try {
             dos.writeBytes("HTTP/1.1 302 Redirect \r\n");
-            header.put("Location", url);
+            addHeader("Location", url);
             for (Map.Entry<String, String> entry : header.entrySet()) {
                 String k = entry.getKey();
                 String v = entry.getValue();
@@ -51,8 +51,8 @@ public class HttpResponse {
     public void response200Header(String contentType, int lengthOfBodyContent) {
         try {
             dos.writeBytes("HTTP/1.1 200 OK \r\n");
-            header.put("Content-Type", "text/" + contentType + ";charset=utf-8");
-            header.put("Content-Length", String.valueOf(lengthOfBodyContent));
+            addHeader("Content-Type", "text/" + contentType + ";charset=utf-8");
+            addHeader("Content-Length", String.valueOf(lengthOfBodyContent));
             for (Map.Entry<String, String> entry : header.entrySet()) {
                 String k = entry.getKey();
                 String v = entry.getValue();
@@ -72,5 +72,9 @@ public class HttpResponse {
         } catch (IOException e) {
             log.error(e.getMessage());
         }
+    }
+
+    public void addHeader(String key, String value) {
+        header.put(key, value);
     }
 }
