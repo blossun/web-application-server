@@ -38,13 +38,15 @@ public class RequestHandler extends Thread {
                 log.debug("user : {}", user);
                 DataBase.addUser(user);
                 DataOutputStream dos = new DataOutputStream(out);
-                response302Header(dos);
+                response.sendRedirect("/index.html"); //body 불필요
             } else if ("/user/login".equals(url)) {
                 User user = DataBase.findUserById(request.getParameter("userId"));
                 if (user != null) {
                     if (user.login(request.getParameter("password"))) {
                         DataOutputStream dos = new DataOutputStream(out);
-                        response302LoginSuccessHeader(dos);
+                        //TODO: rseponse.header에 직접 접근해서 put 메소드로 값을 셋팅하는 것보다 별도의 메소드로 분리하는 것이 좋을 듯
+                        response.header.put("Set-Cookie", "logined=true");
+                        response.sendRedirect("/index.html");
                     } else {
                         response.forward("/user/login_failed.html");
                     }
@@ -74,27 +76,6 @@ public class RequestHandler extends Thread {
                 response.responseBody(body);
             }
             response.forward(url);
-        } catch (IOException e) {
-            log.error(e.getMessage());
-        }
-    }
-
-    private void response302Header(DataOutputStream dos) {
-        try {
-            dos.writeBytes("HTTP/1.1 302 Redirect \r\n");
-            dos.writeBytes("Location: /index.html \r\n");
-            dos.writeBytes("\r\n");
-        } catch (IOException e) {
-            log.error(e.getMessage());
-        }
-    }
-
-    private void response302LoginSuccessHeader(DataOutputStream dos) {
-        try {
-            dos.writeBytes("HTTP/1.1 302 Redirect \r\n");
-            dos.writeBytes("Set-Cookie: logined=true \r\n");
-            dos.writeBytes("Location: /index.html \r\n");
-            dos.writeBytes("\r\n");
         } catch (IOException e) {
             log.error(e.getMessage());
         }
