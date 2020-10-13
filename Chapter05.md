@@ -97,3 +97,286 @@ public class HttpRequestTest {
 위에 작성한 테스트 코드를 만족하는 HttpRequest 코드를 구현하면 된다.
 
 테스트 데이터를 위해 파이릉ㄹ 만들고 InputStream을 생성하는 과정이 번거롭게 느껴지면 String으로 문자열을 전달해 테스트할 수 있는 방법을 고민해보자
+
+
+
+---
+
+# 5.2.1 요청데이터를 처리하는 로직을 별도의 클리스로 분리
+
+리팩토링 전 RequestHandler 클래스가 담당하는 작업
+
+- 클라이언트 요청에 대한 헤더와 본문 데이터 처리
+- 클라이언트 요청에 따른 로직 처리(회원가입, 로그인 등)
+- 로직 처리 완료 후, 클라이언트에 대한 응답 헤더와 본문 데이터 처리 작업
+
+클래스 하나가 너무 많은 일을 하고 있다.
+
+각 객체가 한 가지 책임을 가지도록 설계를 개선하는 리팩토링을 진행
+
+1. RequestHandler 클래스가 가지고 있는 책임 중, 클라이언트 요청 데이터와 응답 데이터 처리르 별도의 클래스로 분리
+
+**HttpRequest의 책임**
+
+클라이언트 요청 데이터를 읽은 후 각 데이터를 사용하기 좋은 형태로 분리하는 역할만 담당 (데이터 파싱)
+
+분리한 데이터를 사용하는 부분은 RequestHandler가 가지도록 한다. (데이터 사용)
+
+**테스트 코드를 기반으로 개발할 경우 얻을 수 있는 효과**
+
+- 클래스에 버그가 있는지 빨리 찾아 구현 가능
+
+  RequestHandler가 바로 사용하기 전에 HttpRequest 기능이 정상적으로 동작하는지 테스트를 마친 후 사용하면 수동 테스트 횟수가 많이 줄어든다.
+
+- 디버깅하기 쉽다.
+
+  클래스에 대한 단위 테스트를 하여 어느 클래스에서 발생한 버그인지 좀 더 쉽고 빠르게 해결할 수 있기 때문에 개발 생산성을 높여준다.
+
+- 테스트 코드가 있기 때문에 리팩토링하기 편하다.
+
+  테스트코드가 없다면 리팩토링 시 프로덕션 코드를 수정하는 시간 보다 리팩토링한 코드가 정상적으로 동작하는지 검증하기위한 테스트에 더 많은 시간이 소요된다.
+
+계속해서 리팩토링할 부분이 없는지 소스코드를 다양한 시각으로 찾아봐야 한 단계 성장할 수 있다.
+
+------
+
+## 1차 리팩토링
+
+```java
+import static util.HttpRequestUtils.parseHeader;
+
+public class HttpRequest {
+    private static final Logger log = LoggerFactory.getLogger(HttpRequest.class);
+
+    private String method;
+    private String path;
+    private Map<String, String> headers = new HashMap<>();
+    private Map<String, String> params = new HashMap<>();
+
+    public String getMethod() {
+        return method;
+    }
+
+    public String getPath() {
+        return path;
+    }
+
+    public String getHeader(String key) {
+        return headers.get(key);
+    }
+
+    public String getParameter(String key) {
+        return params.get(key);
+    }
+
+    public HttpRequest(InputStream in) {
+        try {
+            BufferedReader br = new BufferedReader(new InputStreamReader(in, "UTF-8"));
+            String line = br.readLine();
+            if (line == null) {
+                return;
+            }
+
+            processRequestLine(line);
+
+            this.headers.put("Content-Length", "0");
+            line = br.readLine();
+            while (line != null && !line.equals("")) { //헤더 //line.equals("")만 있을 때, GET 메세지에서 NPE가 발생해서 조건 추가
+                log.debug("header : {}", line);
+                HttpRequestUtils.Pair header = parseHeader(line);
+                if (header != null) {
+                    headers.put(header.getKey(), header.getValue());
+                }
+                line = br.readLine();
+            }
+
+            if (this.method.equals("POST")) {
+                String body = IOUtils.readData(br, Integer.parseInt(headers.get("Content-Length")));
+                this.params = HttpRequestUtils.parseQueryString(body);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+    }
+
+    private void processRequestLine(String requestLine) {
+        log.debug("request line : {}", requestLine);
+        String[] tokens = requestLine.split(" ");
+        method = tokens[0];
+
+        if ("POST".equals(method)) {
+            path = parseDefaultUrl(tokens);
+            return;
+        }
+
+        int index = parseDefaultUrl(tokens).indexOf("?"); //GET에 queryString 존재 여부에 따라 로직 분리
+        if (index == -1) {
+            this.path = parseDefaultUrl(tokens);
+            return;
+        }
+
+        path = parseDefaultUrl(tokens).substring(0, index);
+        params = HttpRequestUtils.parseQueryString(parseDefaultUrl(tokens).substring(index + 1));
+    }
+
+    private String parseDefaultUrl(String[] tokens) {
+        String url = tokens[1];
+        if (url.equals("/")) {
+            url = "/index.html";
+        }
+        return url;
+    }
+}
+```
+
+------
+
+## 2차 리팩토링
+
+※ **리팩토링 해야할 부분 찾기**
+
+1. HttpRequest의 요청 라인을 처리하는 processRequestLine() 메소드의 복잡도가 높다.
+
+애플리케이션을 개발하다 보면 private 메소드인데 로직의 복잡도가 높아 추가적인 테스트가 필요하다고 생각하는 메소드가 발생한다. 하지만 현재 구조는 이 메소드만 별도로 분리해 테스트하기 힘들다.
+
+이 메소드를 테스트 가능하도록 하려면 어떻게 해야 할까?
+
+★ **일반적으로 해결할 수 있는 방법 두가지**
+
+1. private 접근 제어자인 메소드를 default로 수정하고 메소드 처리 결과를 반환하도록 수정해서 테스트
+2. 메소드 구현 로직을 새로운 클래스로 분리
+
+processRequestLine() 메소드의 경우, 첫째 방법을 적용하기에는 메소드 처리 후 반환해야 하는 상태값이 한 개가 아니라 쉽지 않다. 따라서 지금 경우 `RequestLine`이라는 이름으로 새로운 클래스를 추가하는 방식으로 리팩토링을 진행해보자
+
+```java
+public class RequestLine {
+    private static final Logger log = LoggerFactory.getLogger(RequestLine.class);
+
+    private String method;
+    private String path;
+    private Map<String, String> params = new HashMap<>();
+
+    public RequestLine(String requestLine) {
+        log.debug("request line : {}", requestLine);
+        String[] tokens = requestLine.split(" ");
+        if (tokens.length != 3) {
+            throw new IllegalArgumentException(requestLine + "이 형식에 맞지 않습니다.");
+        }
+        method = tokens[0];
+        if ("POST".equals(method)) {
+            path = parseDefaultUrl(tokens);
+            return;
+        }
+
+        int index = parseDefaultUrl(tokens).indexOf("?");
+        if (index == -1) { //GET에 queryString이 있는 경우
+            path = parseDefaultUrl(tokens);
+            return;
+        }
+
+        //GET에 queryString이 없는 경우
+        path = parseDefaultUrl(tokens).substring(0, index);
+        params = HttpRequestUtils.parseQueryString(parseDefaultUrl(tokens).substring(index + 1));
+    }
+
+    private String parseDefaultUrl(String[] tokens) {
+        String url = tokens[1];
+        if (url.equals("/")) {
+            url = "/index.html";
+        }
+        return url;
+    }
+
+    public String getMethod() {
+        return method;
+    }
+
+    public String getPath() {
+        return path;
+    }
+
+    public Map<String, String> getParams() {
+        return params;
+    }
+}
+```
+
+- 리팩토링 코드
+
+[[Refactor\]: Chapter05 5.2 복잡한 메소드 구현 로직을 새로운 클래스로 분리 · blossun/web-application-server@8b45d74](https://github.com/blossun/web-application-server/commit/8b45d748ae6a4c4efcee757201bf5937fc32729c)
+
+RequestLine이라는 새로운 클래스를 추가해 HttpRequest에서 요청 라인을 처리하는 책임을 분리했지만 **HttpRequest의 메소드 원형은 바뀌지 않았다.** 따라서 **기존의 HttpRequestTest도 변경없이 테스트할 수 있다.**
+
+위와 같이 메소드가 private이고 메소드 처리 후 반환되는 값이 여러 개라고 반드시 새로운 객체를 추가하는 것이 정답은 아니다. 단지 **private 메소드의 복잡도가 높아 별도의 테스트가 필요한데 테스트하기 힘들다면 어딘가 리팩토링할 부분이 있겠다**는 힘트를 얻는 용도로만 활용하면 좋다.
+
+------
+
+## 3차 리팩토링
+
+※ **리팩토링 해야할 부분 찾기**
+
+- GET, POST 문자열이 하드코딩되어 사용되는 부분
+
+**상수 값이 서로 연관되어 있는 경우 자바의 enum을 쓰기 적합한 곳이다.**
+
+독립적으로 존재하는 상수 값은 굳이 enum으로 추가할 필요는 없지만, 남자(M)/여자(F) 또는 북쪽(NORTH)/남쪽(SOUTH)/서쪽(WEST)/동쪽(EAST)와 같이 상수 값이 연관성을 가지는 경우 enum을 사용하기 적합
+
+1. GET, POST를 HttpMethod라는 이름의 enum으로 추가하는 리팩토링을 진행
+
+- 리팩토링 코드
+
+[[Refactor\]: Chapter05 5.2 GET, POST를 HttpMethod라는 이름의 enum으로 추가 · blossun/web-application-server@2196cd7](https://github.com/blossun/web-application-server/commit/2196cd7d243781074e00335d8302432ae05355cd)
+
+1. 새로 생성한 객체가 일을 하도록 수정
+
+**일단 새로운 객체를 추가했으면 객체를 최대한 활용하기 위해 노력해 본다.**
+
+※ 객체를 최대한 활용하는 연습 첫번째
+
+객체에서 값을 꺼낸 후 로직을 구현하려고 하지말고, **값을 가지고 있는 객체에 메시지를 보내 일을 시키도록 연습해보자**
+
+HttpMethod가 POST인지 확인하는 로직을 HttpMethod 클래스에서 현재 자신의 상태가 POST인지 여부를 판단하는 `isPost()` 메소드를 추가한 후 리팩토링
+
+```java
+if (getMethod() == HttpMethod.POST)
+=> 
+if (getMethod().isPost())
+public enum HttpMethod {
+    GET,
+    POST;
+    
+    public boolean isPost() {
+        return this == POST;
+    }
+}
+```
+
+POST 메소드인지 여부를 판단하기 위해 HttpMethod에서 GET, POST 값을 꺼내 비교하는 것이 아니라 이 값을 가지고 있는 HttpMethod가 POST 여부를 판단하도록 메시지를 보내 물어본다.
+
+클라이언트 요청 데이터에 대한 처리를 모두 HttpRequest로 위임했기 때문에 RequestHandler는 요청 데이터를 처리하는 모든 로직을 제거할 수 있다. ReqeustHandler는 HttpRequest가 제공하는 메소드를 이용해 필요한 데이터를 사용하기만 하면 된다. 이와 같이 **클라이언트 요청을 HttpRequest라는 객체로 추상화해 구현함으로써 RequestHandler는 요청 데이터를 조작하는 부분을 제거할 수 있었다.**
+
+- 리팩토링 코드
+
+[[Refactor\]: Chapter05 5.2 새로 생성한 HttpMethod가 일을 하도록 한다. · blossun/web-application-server@f68ec06](https://github.com/blossun/web-application-server/commit/f68ec065953c3868d546ae7de3c5b17bb5dffd51)
+
+------
+
+## 4차 리팩토링
+
+RequestHandler의 isLogin() 메소드에서 HttpRequest에 쿠키 헤더 값을 꺼내 조작하는 부분
+
+HttpRequest가 쿠키 헤더 값에 대한 처리를 담당하도록 위임하는 것이 객체지향 개발 관점에서도 좋다.
+
+HttpRequest가 쿠키값을 처리하도록 리팩토링
+
+- 리팩토링 코드
+
+[[Refactor\]: Chapter05 5.2 HttpRequest가 쿠키값을 처리하도록 · blossun/web-application-server@39680b1](https://github.com/blossun/web-application-server/commit/39680b193fb145d11367835f9b795a8917289395)
+
+------
+
+**객체지향 설계에서 중요한 연습은 요구사항을 분석해 객체로 추상화하는 부분이다.**
+
+요구사항이 명확한 애플리케이션(체스 게임, 지뢰 찾기)으로 연습할 것을 추천
+
