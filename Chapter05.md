@@ -380,3 +380,158 @@ HttpRequest가 쿠키값을 처리하도록 리팩토링
 
 요구사항이 명확한 애플리케이션(체스 게임, 지뢰 찾기)으로 연습할 것을 추천
 
+
+
+
+
+---
+
+# 5.2.2 응답데이터를 처리하는 로직을 별도의 클리스로 분리
+
+- 힌트
+  - RequestHandler 클래스를 보면 응답 데이터 처리를 위한 많은 중복이 있다. 이 중복을 제거해 본다.
+  - 응답 헤더 정보를 Map<String, String>으로 관리한다.
+  - 응답을 보낼 때 HTML, CSS, 자바스크립트 파일을 직접 읽어 응답으로 보내는 메소드는 `forward()`, 다른 URL로 리다이렉트하는 메소드는 `sendRedirect()` 메소드로 나누어 구현한다.
+  - RequestHandler가 새로 추가한 HttpResponse를 사용하도록 리팩토링한다.
+
+------
+
+## 착각한 내용
+
+css 파일 적용을 위해 Response Header의 Content-Type을 "text/css"로 지정해줬어야 했다.
+
+그 과정에서 다른 `js`, `ico` 파일 요청에 대한 Response Header의 Content-Type을 해당 파일 타입으로 넘겼었다.
+
+`Content-Type: text/js;charset=utf-8` 이렇게 보내면 파일 양식이 깨진다.
+
+그래서 css 파일에 대한 것만 `text/css` 로 넘기고 나머지 파일들은 기본적으로 `text/html` 로 넘겼다.
+
+```java
+    public void forward(String url) throws IOException {
+        byte[] body = Files.readAllBytes(new File("./webapp" + url).toPath());
+        // 1. Request에서 요청한 Content-Type 값을 가지고 결정
+//        String contentType = request.getHeader("Content-Type");
+//        contentType = contentType.substring(contentType.indexOf("text/" + 5), contentType.indexOf(";"));
+        // 2. 넘겨받은 url의 확장자를 통해서 contentType 결정
+//        String contentType = url.substring(url.indexOf(".") + 1);
+        String contentType = "html";
+        if (url.endsWith("css")) {
+            contentType = "css";
+        }
+        log.debug("contentType : {}", contentType);
+        response200Header(contentType, body.length);
+        responseBody(body);
+    }
+```
+
+⇒ `MIME types` 를 맞춰서 넘겨줘야 한다.
+
+js, css, html 등은 url에서 추출한 타입에 맞게 response header에 content-type이 잘 들어가지만, 그 외 파일들은 잘 못 적용되기 때문에 `String contentType = url.substring(url.indexOf(".") + 1);` 코드로 바로 contentType을 넘기면 안 된다.
+
+기본적으로 `Content-Type: text/html` 로 넘기면 깨지지 않는다.
+
+![https://s3-us-west-2.amazonaws.com/secure.notion-static.com/b8e38fa3-cdff-4a7f-9afa-3754b22e3371/Untitled.png](https://s3-us-west-2.amazonaws.com/secure.notion-static.com/b8e38fa3-cdff-4a7f-9afa-3754b22e3371/Untitled.png)
+
+## Http의 Content-Type과 MIME types
+
+**문법**
+
+```
+Content-Type: text/html; charset=utf-8
+Content-Type: multipart/form-data; boundary=something
+```
+
+**디렉티브**
+
+**`media-type` :** 리소스 혹은 데이터의 [MIME type](https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types).
+
+**charset :** 문자 인코딩 표준
+
+**boundary :** 멀티파트 개체에 대해 `boundary` 디렉티브는 필수인데, 이메일 게이트를 통해 매우 탄탄해졌다고 알려진 캐릭터셋의 1~70개의 문자들로 구성되며, 빈 공백으로 끝나지 않습니다. 이는 메시지의 멀티 파트 경계선을 캡슐화하기 위해 사용됩니다.
+
+**MIME 타입 구조**
+
+```html
+type/subtype
+```
+
+- application/octet-stream
+
+  바이너리 파일
+
+- text/plain
+
+- text/css
+
+- text/html
+
+- text/javascript
+
+[Content-Type](https://developer.mozilla.org/ko/docs/Web/HTTP/Headers/Content-Type)
+
+[MIME types (IANA media types)](https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types)
+
+### Java HashMap foreach 문
+
+- 람다
+
+```java
+header.forEach((k, v) -> {
+                    dos.writeBytes(k + ": " + v + "\\r\\n");
+            });
+```
+
+- ForEach 반복문
+
+```java
+for (Map.Entry<String, String> entry : header.entrySet()) {
+    String k = entry.getKey();
+    String v = entry.getValue();
+    dos.writeBytes(k + ": " + v + "\\r\\n");
+}
+Set<String> keys = headers.keySet();
+for (String key : keys) {
+    dos.writeBytes(key + ": " + headers.get(key) + " \\r\\n");
+}
+```
+
+### 고민했던 부분
+
+- 헤더에 값을 저장하는 코드를 어느 메소드에서 진행해야할지 고민 forward() 또는 response200Header() 아니면 RequestHandler
+
+- login 성공 시, Cookie 헤더 값에 값을 셋팅해줘야한다.!!
+
+  `"Set-Cookie: logined=true`
+
+- 따라서 Response Header는 RequestHandler에서 값을 셋팅해주고 response할 때 넘겨주는 것으로 하는 것이 좋을 듯!!!
+
+- 리팩토링 후 클래스 다이어그램
+
+![image-20201013170803752](images/image-20201013170803752.png)
+
+- 리팩토링 코드
+
+[[Chapter 05\] 웹 서버 리팩토링 - 02 HttpResponse · Issue #2 · blossun/web-application-server](https://github.com/blossun/web-application-server/issues/2)
+
+## 테스트 코드
+
+HttpResponseTest 코드는 HttpResponse를 통해 생성된 응답 데이터를 src/test/resources 에 파일을 생성해 수동으로 확인하도록 구현하고 있다. 수동으로 확인하는 번거로움이 있기는 하지만 HttpResponse를 다른 클래스에서 사용하기 전에 정상적으로 동작하는지 검증할 수 있다.
+
+수동 테스트를 개선하고 싶다면 `assertEquals()` 를 통해 자동화하도록 하자
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
