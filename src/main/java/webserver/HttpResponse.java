@@ -22,18 +22,23 @@ public class HttpResponse {
         this.dos = new DataOutputStream(out);
     }
 
-    public void forward(String url) throws IOException {
-        byte[] body = Files.readAllBytes(new File("./webapp" + url).toPath());
-        if (url.endsWith(".css")) {
-            addHeader("Content-Type", "text/css");
-        } else if (url.endsWith(".js")) {
-            addHeader("Content-Type", "text/javascript");
-        } else {
-            addHeader("Content-Type", "text/html;charset=utf-8");
+    public void forward(String url) {
+        try {
+            byte[] body = Files.readAllBytes(new File("./webapp" + url).toPath());
+
+            if (url.endsWith(".css")) {
+                addHeader("Content-Type", "text/css");
+            } else if (url.endsWith(".js")) {
+                addHeader("Content-Type", "text/javascript");
+            } else {
+                addHeader("Content-Type", "text/html;charset=utf-8");
+            }
+            addHeader("Content-Length", body.length + "");
+            response200Header();
+            responseBody(body);
+        } catch (IOException e) {
+            log.error(e.getMessage());
         }
-        addHeader("Content-Length", body.length + "");
-        response200Header();
-        responseBody(body);
     }
 
     public void forwardBody(String body) {
