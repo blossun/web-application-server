@@ -430,8 +430,6 @@ js, css, html 등은 url에서 추출한 타입에 맞게 response header에 con
 
 기본적으로 `Content-Type: text/html` 로 넘기면 깨지지 않는다.
 
-![https://s3-us-west-2.amazonaws.com/secure.notion-static.com/b8e38fa3-cdff-4a7f-9afa-3754b22e3371/Untitled.png](https://s3-us-west-2.amazonaws.com/secure.notion-static.com/b8e38fa3-cdff-4a7f-9afa-3754b22e3371/Untitled.png)
-
 ## Http의 Content-Type과 MIME types
 
 **문법**
@@ -495,6 +493,8 @@ for (String key : keys) {
 }
 ```
 
+
+
 ### 고민했던 부분
 
 - 헤더에 값을 저장하는 코드를 어느 메소드에서 진행해야할지 고민 forward() 또는 response200Header() 아니면 RequestHandler
@@ -519,13 +519,148 @@ HttpResponseTest 코드는 HttpResponse를 통해 생성된 응답 데이터를 
 
 수동 테스트를 개선하고 싶다면 `assertEquals()` 를 통해 자동화하도록 하자
 
+---
+
+# 5.1.2.3 다형성을 활용해 클라이언트 요청 URL에 대한 분기 처리를 제거한다.
+
+- 힌트
+
+  - 각 요청과 응답에 대한 처리를 담당하는 부분을 추상화해 인터페이스로 만든다. 인터페이스는 다 음과 같이 구현할 수 있다.
+
+    ```java
+    public interface Controller {
+    	void service(HttpRequest request, HttpResponse response);
+    }
+    ```
+
+  - 각 분기문을 Controller 인터페이스를 구현하는(implements) 클래스를 만들어 분리한다.
+
+  - 이렇게 생성한 Controller 구현체를 Map<String, Controller>에 저장한다. Map의 key에 해당
+
+    하는 String은 요청 URL, value에 해당하는 Controller는 Controller 구현체이다.
+
+  - 클라이언트 요청 URL에 해당하는 Controller를 찾아 service() 메소드를 호출한다.
+
+  - Controller 인터페이스를 구현하는 AbstractController 추상클래스를 추가해 중복을 제거하고,
+
+    service() 메소드에서 GET과 POST HTTP 메소드에 따라 doGet(), doPost() 메소드를 호출하도 록 한다.
+
+------
+
+- 리팩토링 후 클래스 다이어그램
+
+![image-20201015231520258](images/image-20201015231520258.png)
+
+### 클래스 다이어그램
+
+클래스 간의 관계를 쉽게 파악하기 위한 목적으로 사용하는 UML(Unified Modeling Language)
+
+인터페이스 구현 : (implements) 화살표 끝 삼각형, 점선
+
+상속 : (extends) 화살표 끝 삼각형, 실선
+
+- 클래스 간의 의존관계 : 열린 화살표
+  - 클래스의 필드를 통해 연결되는 경우 : 실선
+  - 메소드의 로컬 변수로 연결되는 경우 : 점선
+  - 의존관계 클래스를 해당 클래스의 인스턴스를 직접 생성하는 경우 : <<create>>
+
+------
+
+### 리팩토링할 부분 찾기
+
+`run()` 의 복잡도가 높다. 가장 큰 문제점은 기능이 추가될 때마다 새로운 else if 절이 추가되는 구조로 구현되어 있다는 것이다. 이는 `OCP(개방폐쇄의 원칙, Open-Closed Principle)` 원칙을 위반하고 있다.
+
+- OCP(개방폐쇄의 원칙, Open-Closed Principle) 원칙 - 객체지향 설계 원칙
+
+  요구사항의 변경이나 추가사항이 발생하더라도, 기존 구성요소는 수정이 일어나지 말아야 하며, 기존 구성요소를 쉽게 확장해서 **재사용**할 수 있어야 한다.
+
+## 1차 리팩토링
+
+분기문에 해당하는 로직을 별도의 메소드로 추출 리팩토링한 메소드는 HttpRequest, HttpResponse만 인자로 받고 있다. 이와 같이 **메소드 원형이 같기 때문에 자바의 인터페이스로 추출하는 것이 가능**
+
+- 리팩토링 코드
+
+[[Refactor\]: Chapter05 5.3 클라이언트 요청 URL에 대한 분기 처리를 제거 · blossun/web-application-server@510eada](https://github.com/blossun/web-application-server/commit/510eada1f76bd5764181f0a89ec630251117787a)
+
+## 2차 리팩토링
+
+1. 메소드 원형이 같은 로직 메소드들을 인터페이스로 추출
+
+   [[Refactor\]: Chapter05 5.3 클라이언트 요청 URL에 대한 분기 처리를 제거 · blossun/web-application-server@510eada](https://github.com/blossun/web-application-server/commit/510eada1f76bd5764181f0a89ec630251117787a)
+
+2. Controller 인터페이스 생성 후, 분기문에서 분리했던 메소드의 구현 코드를 Controller 인터페이스에 대한 구현 클래스로 이동
+
+   각 분기문에 해당하는 Controller(CreateUserController, LoginController, ListUserController)를 추가
+
+   [[Refactor\]: Chapter05 5.3 각 분기문에 해당하는 Controller 생성 · blossun/web-application-server@9ac8ff8](https://github.com/blossun/web-application-server/commit/9ac8ff8d68ea485b8e46554d951d0fddeb6fd636)
+
+3. 각 요청 URL과 URL에 대응하는 Controller를 연결하는 RequestMapping이라는 새로운 클래스를 추가
+
+   - RequestMapping
+
+     웹 애플리케이션에서 서비스하는 모든 URL과 Controller를 관리, 요청 URL에 해당하는 Controller를 반환하는 역할
+
+   - Controller 구현체를 Map<String, Controller>에 저장한다.
+
+     key (String) : 요청 URL
+
+     value (Controller) : Controller 구현체
+
+   - 클라이언트 요청 URL에 해당하는 Controller를 찾아 service() 메소드를 호출한다.
+
+   [[Refactor\]: Chapter05 5.3 각 요청 URL과 URL에 대응하는 Controller를 연결하는 Reques... · blossun/web-application-server@e9e117c](https://github.com/blossun/web-application-server/commit/e9e117caa66d236f8fd7fb4f43ee028a81294695)
+
+> 개인 정보수정, 로그아웃과 같은 새로운 기능이 추가된다면 어떻게 구현할 수 있을까?
+
+앞의 리팩토링을 통해 더 이상 RequestHandler의 run() 메소드는 수정할 필요가 없다. 새로운 기능이 추가되면 Controller 인터페이스를 구현하는 새로운 클래스를 추가한 후 Requestmapping의 Map에 요청 URL과 Controller 클래스를 추가하면 된다.
+
+또한, 변경사항이 발생하면 다른 클래스에 영향을 미치지 않으면서 해당 Controller 클래스의 service() 메소드만 수정하면 된다.
+
+## 3차 리팩토링
+
+HTTP 메소드(GET, POST)에 따라 다른 처리를 할 수 있도록 다음과 같은 추상 클래스를 추가할 수 있다.
+
+```java
+public class AbstractController implements Controller{
+
+    @Override
+    public void service(HttpRequest request, HttpResponse response) {
+        HttpMethod method = request.getMethod();
+        
+        if (method.isPost()) {
+            doPost(request, response);
+        } else {
+            doGet(request, response);
+        }
+    }
+
+    protected void doGet(HttpRequest request, HttpResponse response) {
+    }
+
+    protected void doPost(HttpRequest request, HttpResponse response) {
+    }
+}
+```
+
+※ 주의
+
+doGet과 doPost는 상속받는 Controller에서 구현해야하므로 접근제한자를 private이 아니라 `protected`로 정의해야 한다.
+
+위와 같이 AbstractController를 추가한 후 각 Controller는 Controller 인터페이스를 직접 구현하는 것이 아닌 AbstractController를 상속해 각 HTTP 메소드에 맞는 메소드를 오버라이드하도록 구현할 수 있다.
+
+[[Refactor\]: Chapter05 5.3 HTTP 메소드(GET, POST)에 따라 다른 처리를 할 수 있도록 다음과 ... · blossun/web-application-server@835ce89](https://github.com/blossun/web-application-server/commit/835ce892375f87e82859f49d4dc897456d1af9ea)
+
+★ **위와 같이 구현할 경우 장점**
+
+요청 URL이 같더라도 HTTP메소드가 다른 경우 새로운 Controller 클래스를 추가하지 않고 Controller 하나로 GET(doGet메소드), POST(doPost 메소드)를 모두 지원하는 것이 가능하다.
 
 
 
+### 현재 구현한 HTTP 웹서버의 문제점
 
-
-
-
+- HTTP 요청과 응답 헤더, 본문 처리와 같은 데 시간을 투자함으로써 정작 중요한 로직을 구현하는데 투자할 시간이 상대적으로 적다.
+- 동적인 HTML을 지원하는데 한계가 있다. 동적으로 HTML을 생성할 수 있지만 많은 코딩량을 필요로 한다. ⇒ **서블릿**
+- 사용자가 입력한 데이터가 서버를 재시작하면 사라진다. 사용자가 입력한 데이터를 유지하고 싶다. ⇒ **DB**
 
 
 
