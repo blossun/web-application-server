@@ -33,9 +33,19 @@ public class RequestHandler extends Thread {
                 return ;
             }
             controller.service(request, response);
+
         } catch (IOException e) {
             log.error(e.getMessage());
         }
     }
 
+
+    private void responseBody(DataOutputStream dos, byte[] body) {
+        try {
+            dos.write(body, 0, body.length);
+            dos.flush();
+        } catch (IOException e) {
+            log.error(e.getMessage());
+        }
+    }
 }
